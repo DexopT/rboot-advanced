@@ -6,12 +6,47 @@
 //////////////////////////////////////////////////
 
 #include "rboot-private.h"
+#include "rboot-ota.h"
 #include <rboot-hex2a.h>
 
 #ifndef UART_CLK_FREQ
 // reset apb freq = 2x crystal freq: http://esp8266-re.foogod.com/wiki/Serial_UART
 #define UART_CLK_FREQ	(26000000 * 2)
 #endif
+
+// LED control macros for status feedback
+#ifndef LED_GPIO_NUM
+#define LED_GPIO_NUM 2  // Default to GPIO2 (common for ESP-12 modules)
+#endif
+
+// LED control functions
+static inline void led_init(void) {
+    // Configure LED GPIO as output
+    GPIO_REG_WRITE(GPIO_ENABLE_W1TS_ADDRESS, (1 << LED_GPIO_NUM));
+    // Turn LED off (active low for most ESP8266 boards)
+    GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, (1 << LED_GPIO_NUM));
+}
+
+static inline void led_on(void) {
+    // Turn LED on (active low)
+    GPIO_REG_WRITE(GPIO_OUT_W1TC_ADDRESS, (1 << LED_GPIO_NUM));
+}
+
+static inline void led_off(void) {
+    // Turn LED off
+    GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, (1 << LED_GPIO_NUM));
+}
+
+static inline void led_blink(int count, int delay_ms) {
+    for (int i = 0; i < count; i++) {
+        led_on();
+        ets_delay_us(delay_ms * 1000);
+        led_off();
+        if (i < count - 1) {
+            ets_delay_us(delay_ms * 1000);
+        }
+    }
+}
 
 static uint32_t check_image(uint32_t readpos) {
 
@@ -560,9 +595,6 @@ void call_user_start(void) {
 
 	addr = find_image();
 	if (addr != 0) {
-		loader = (stage2a*)entry_addr;
-		loader(addr);
-	}
 }
 
 #else
